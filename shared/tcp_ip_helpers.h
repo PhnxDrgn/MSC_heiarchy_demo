@@ -1,0 +1,7 @@
+#ifndef TCP_IP_HELPERS_H
+#define TCP_IP_HELPERS_H
+
+#define DYNAMIC_PORT_MIN 49152
+#define DYNAMIC_PORT_MAX 65535
+
+#endif // TCP_IP_HELPERS_H

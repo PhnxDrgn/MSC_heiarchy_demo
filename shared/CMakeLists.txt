@@ -1,2 +1,11 @@
-# add includes
-target_include_directories(msc PUBLIC inc)
+project(shared)
+
+add_library(shared
+    SHARED
+        src/client.c
+)
+
+target_include_directories(shared
+    PUBLIC
+        inc
+)

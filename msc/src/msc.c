@@ -6,45 +6,13 @@
 #include <unistd.h> // used for close()
 #include <stdbool.h>
 #include <signal.h>
+#include "client.h"
 #include "tcp_ip_helpers.h"
 
 #define MAX_ID_SIZE 128
-#define MAX_NUM_CLIENTS 32
-
-typedef struct
-{
-    int socket;
-    struct sockaddr_in addr;
-    bool available;
-    socklen_t addrLen;
-    unsigned int index;
-} socketData_t;
 
 int serverSocket = 0;
-socketData_t clientData[MAX_NUM_CLIENTS];
-bool clientSocketAvailable = true;
-
-/**
- * Function to close the client socket and updat the available flag
- */
-void closeClientSocket(socketData_t *clientSocket)
-{
-    if (clientSocket->socket > 0)
-    {
-        printf("Closing socket for Base Station %d\n", clientSocket->index);
-        close(clientSocket->socket);
-    }
-
-    // reset values
-    clientSocket->socket = 0;
-    memset(&clientSocket->addr, 0, sizeof(struct sockaddr_in));
-    clientSocket->available = true;
-
-    if (!clientSocketAvailable)
-        printf("Client socket available.\n");
-
-    clientSocketAvailable = true;
-}
+clientSockets_t clientSockets;
 
 void exitFunction()
 {
@@ -58,47 +26,10 @@ void exitFunction()
         close(serverSocket);
     }
 
-    // closing all client sockets
-    for (unsigned int ii = 0; ii < MAX_NUM_CLIENTS; ii++)
-    {
-        closeClientSocket(&clientData[ii]);
-    }
+    // close client sockets
+    client_closeSockets(&clientSockets);
 
     printf("MSC Closed.\n");
-}
-
-/**
- * initialized clientData
- */
-void initClientData()
-{
-    for (unsigned int ii = 0; ii < MAX_NUM_CLIENTS; ii++)
-    {
-        clientData[ii].index = ii;
-        clientData[ii].socket = 0;
-        clientData[ii].addrLen = sizeof(clientData[ii].addr);
-        closeClientSocket(&clientData[ii]);
-    }
-}
-
-/**
- * Returns the address of the first availble client socket in clientSockets
- */
-socketData_t *getAvailableClientSocket()
-{
-    for (unsigned int ii = 0; ii < MAX_NUM_CLIENTS; ii++)
-    {
-        if (clientData[ii].available)
-        {
-            clientData[ii].available = false;
-            return &clientData[ii];
-        }
-    }
-
-    // none found in for loop
-    clientSocketAvailable = false;
-    printf("Out of client sockets.\n");
-    return NULL;
 }
 
 void signalHandler(int sig)
@@ -141,7 +72,7 @@ int main(int argc, char *argv[])
     // check args for at least 1 arg
     if (argc < 2)
     {
-        printf("Minumum of 1 arg required for the MSC ID\n");
+        printf("Usage: ./msc <ID>\n");
         return EXIT_FAILURE;
     }
 
@@ -153,7 +84,7 @@ int main(int argc, char *argv[])
     }
 
     // init client sockets
-    initClientData();
+    client_socketsInit(&clientSockets);
 
     // connect function to handle exits
     atexit(exitFunction);
@@ -223,10 +154,10 @@ int main(int argc, char *argv[])
     // listen for clients
     while (1)
     {
-        if (!clientSocketAvailable)
+        if (!clientSockets.socketsAvailable)
             continue;
 
-        socketData_t *availableClient = getAvailableClientSocket();
+        socketData_t *availableClient = client_getAvailableSocket(&clientSockets);
 
         availableClient->socket = accept(serverSocket, (struct sockaddr *)&availableClient->addr, &availableClient->addrLen);
         printf("New Base Station accepted. ID given: %d\n", availableClient->index);

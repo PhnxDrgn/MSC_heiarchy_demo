@@ -1,7 +1,12 @@
 # add executables
 add_executable(msc src/msc.c)
 
-# add includes
-target_include_directories(msc PUBLIC inc)
+# linking libraries
+target_link_libraries(msc shared)
 
-include_directories(${CMAKE_SOURCE_DIR}/shared)
+# add includes
+target_include_directories(msc
+    PUBLIC
+        inc
+        ${CMAKE_SOURCE_DIR}/shared
+)

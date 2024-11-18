@@ -6,6 +6,7 @@
 #include <unistd.h> // used for close()
 #include <stdbool.h>
 #include <signal.h>
+#include <pthread.h>
 #include "msc_model.h"
 #include "client.h"
 #include "tcp_ip_helpers.h"
@@ -26,7 +27,7 @@ void exitFunction()
     }
 
     // close client sockets
-    client_closeSockets(&bsSockets);
+    client_closeAllSockets(&bsSockets);
 
     printf("MSC Closed.\n");
 }
@@ -62,6 +63,32 @@ void signalHandler(int sig)
     }
 
     exit(EXIT_FAILURE);
+}
+
+void *handleBs(void *arg)
+{
+    socketData_t *bsSocket = (socketData_t *)arg;
+    char buffer[CLIENT_BUFFER_SIZE];
+    int bytesReceived = 0;
+
+    // receive bytes from bs socket
+    while ((bytesReceived = recv(bsSocket->socket, buffer, sizeof(buffer) - 1, 0)) > 0)
+    {
+        buffer[bytesReceived] = '\0';
+
+        // TODO: process message
+    }
+
+    if (bytesReceived == 0)
+    {
+        printf("BS[%d]: Disconnected.\n", bsSocket->index);
+        client_closeSocket(&bsSockets, bsSocket);
+    }
+    else if (bytesReceived < 0)
+    {
+        printf("BS[%d]: Receive error\n", bsSocket->index);
+        client_closeSocket(&bsSockets, bsSocket);
+    }
 }
 
 int main(int argc, char *argv[])
@@ -161,7 +188,8 @@ int main(int argc, char *argv[])
         availableClient->socket = accept(mscSocket, (struct sockaddr *)&availableClient->addr, &availableClient->addrLen);
         printf("New Base Station accepted. ID given: %d\n", availableClient->index);
 
-        // create thread to handle client
+        // create thread to handle bs
+        pthread_create(&availableClient->threadId, NULL, handleBs, (void *)availableClient);
     }
 
     return EXIT_SUCCESS;

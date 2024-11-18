@@ -36,7 +36,7 @@ void exitFunction()
     }
 
     // close client sockets
-    client_closeSockets(&mnSockets);
+    client_closeAllSockets(&mnSockets);
 
     printf("BS Closed.\n");
 }

@@ -6,6 +6,7 @@
 #include <stdbool.h>
 
 #define MAX_NUM_CLIENTS 32
+#define CLIENT_BUFFER_SIZE 1024
 
 typedef struct
 {
@@ -13,6 +14,7 @@ typedef struct
     struct sockaddr_in addr;
     bool available;
     socklen_t addrLen;
+    unsigned long int threadId;
     unsigned int index;
 } socketData_t;
 
@@ -28,9 +30,14 @@ typedef struct
 void client_socketsInit(clientSockets_t *clientSockets);
 
 /**
+ * Finds the socket in client sockets then closes it.
+ */
+void client_closeSocket(clientSockets_t *clientSockets, socketData_t *socket);
+
+/**
  * Function to close the client socket and updat the available flag
  */
-void client_closeSockets(clientSockets_t *clientSockets);
+void client_closeAllSockets(clientSockets_t *clientSockets);
 
 /**
  * Seaches clientSockets_t to find available socketData_t pointer

@@ -6,28 +6,37 @@
 #include <unistd.h> // used for close()
 #include <stdbool.h>
 #include <signal.h>
+#include <arpa/inet.h>
+#include "msc_model.h"
 #include "client.h"
 #include "tcp_ip_helpers.h"
 
-#define MAX_ID_SIZE 128
-
-int serverSocket = 0;
-clientSockets_t clientSockets;
+const char mscIp[] = "127.0.0.1"; // using local ip only for now
+int bsSocket, mscSocket = 0;
+clientSockets_t mnSockets;
 
 void exitFunction()
 {
     // do stuff to make exit graceful
 
-    // closing server socket if open
-    if (serverSocket != 0)
+    // closing msc socket if open
+    if (mscSocket != 0)
     {
-        printf("Closing server socket.\n");
-        shutdown(serverSocket, SHUT_RDWR);
-        close(serverSocket);
+        printf("Closing msc socket.\n");
+        shutdown(mscSocket, SHUT_RDWR);
+        close(mscSocket);
+    }
+
+    // closing bs socket if open
+    if (bsSocket != 0)
+    {
+        printf("Closing bs socket.\n");
+        shutdown(bsSocket, SHUT_RDWR);
+        close(bsSocket);
     }
 
     // close client sockets
-    client_closeSockets(&clientSockets);
+    client_closeSockets(&mnSockets);
 
     printf("BS Closed.\n");
 }
@@ -69,10 +78,10 @@ int main(int argc, char *argv[])
 {
     char BSId[MAX_ID_SIZE] = "\0";
 
-    // check args for at least 1 arg
-    if (argc < 2)
+    // check args for at least 2 arg
+    if (argc < 3)
     {
-        printf("Usage: ./BS <ID>\n");
+        printf("Usage: ./BS <ID> <MSC port>\n");
         return EXIT_FAILURE;
     }
 
@@ -83,8 +92,11 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
+    // check port
+    unsigned int mscPort = strtoul(argv[2], NULL, 10);
+
     // init client sockets
-    client_socketsInit(&clientSockets);
+    client_socketsInit(&mnSockets);
 
     // connect function to handle exits
     atexit(exitFunction);
@@ -104,14 +116,37 @@ int main(int argc, char *argv[])
     // print hello message
     printf("Starting Base Station with ID: %s\n", BSId);
 
-    // create socket
-    serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-    if (serverSocket < 0)
+    // create msc socket
+    mscSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (mscSocket < 0)
     {
-        printf("Failed to create socket.\n");
+        printf("Failed to create MSC socket.\n");
         return EXIT_FAILURE;
     }
-    printf("Socket created.\n");
+    printf("MSC socket created.\n");
+
+    // create msc addr
+    struct sockaddr_in mscAddr = {
+        .sin_family = AF_INET,
+        .sin_addr.s_addr = inet_addr(mscIp),
+        .sin_port = htons(mscPort)};
+
+    printf("Attempting to connect to MSC (%s)... ", mscIp);
+    if (connect(mscSocket, (struct sockaddr *)&mscAddr, sizeof(mscAddr)) < 0) // failed to connect
+    {
+        printf("Failed to connect.\n");
+        exit(EXIT_FAILURE);
+    }
+    printf("Connected.\n");
+
+    // create socket
+    bsSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (bsSocket < 0)
+    {
+        printf("Failed to create BS socket.\n");
+        return EXIT_FAILURE;
+    }
+    printf("BS socket created.\n");
 
     // create internet socket address
     unsigned int port = 0;
@@ -126,7 +161,7 @@ int main(int argc, char *argv[])
     for (unsigned int portNum = DYNAMIC_PORT_MIN; portNum <= DYNAMIC_PORT_MAX; portNum++)
     {
         serverAddr.sin_port = htons(portNum);
-        bindRes = bind(serverSocket, (struct sockaddr *)&serverAddr, sizeof(serverAddr));
+        bindRes = bind(bsSocket, (struct sockaddr *)&serverAddr, sizeof(serverAddr));
 
         if (bindRes >= 0) // success
         {
@@ -145,7 +180,7 @@ int main(int argc, char *argv[])
 
     // listen for connection
     printf("Creating listening queue.\n");
-    if (listen(serverSocket, 5) < 0)
+    if (listen(bsSocket, 5) < 0)
     {
         printf("Failed to listen.\n");
         return EXIT_FAILURE;
@@ -154,12 +189,12 @@ int main(int argc, char *argv[])
     // listen for clients
     while (1)
     {
-        if (!clientSockets.socketsAvailable)
+        if (!mnSockets.socketsAvailable)
             continue;
 
-        socketData_t *availableClient = client_getAvailableSocket(&clientSockets);
+        socketData_t *availableClient = client_getAvailableSocket(&mnSockets);
 
-        availableClient->socket = accept(serverSocket, (struct sockaddr *)&availableClient->addr, &availableClient->addrLen);
+        availableClient->socket = accept(bsSocket, (struct sockaddr *)&availableClient->addr, &availableClient->addrLen);
         printf("New Mobile Node accepted. ID given: %d\n", availableClient->index);
 
         // create thread to handle client

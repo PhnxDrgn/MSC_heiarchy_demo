@@ -29,7 +29,7 @@ void exitFunction()
     // close client sockets
     client_closeAllSockets(&bsSockets);
 
-    printf("MSC Closed.\n");
+    printf("Mobile Switching Center Closed.\n");
 }
 
 void signalHandler(int sig)
@@ -68,13 +68,13 @@ void signalHandler(int sig)
 void *handleBs(void *arg)
 {
     socketData_t *bsSocket = (socketData_t *)arg;
-    char buffer[CLIENT_BUFFER_SIZE];
+    char buffer[TCP_BUFFER_SIZE];
     int bytesReceived = 0;
 
     // receive bytes from bs socket
     while ((bytesReceived = recv(bsSocket->socket, buffer, sizeof(buffer) - 1, 0)) > 0)
     {
-        buffer[bytesReceived] = '\0';
+        buffer[bytesReceived] = '\0'; // null terminate message
 
         // TODO: process message
     }
@@ -190,6 +190,7 @@ int main(int argc, char *argv[])
 
         // create thread to handle bs
         pthread_create(&availableClient->threadId, NULL, handleBs, (void *)availableClient);
+        pthread_detach(availableClient->threadId);
     }
 
     return EXIT_SUCCESS;

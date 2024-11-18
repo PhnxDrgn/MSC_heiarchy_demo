@@ -6,7 +6,6 @@
 #include <stdbool.h>
 
 #define MAX_NUM_CLIENTS 32
-#define CLIENT_BUFFER_SIZE 1024
 
 typedef struct
 {

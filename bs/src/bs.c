@@ -7,12 +7,14 @@
 #include <stdbool.h>
 #include <signal.h>
 #include <arpa/inet.h>
+#include <pthread.h>
 #include "msc_model.h"
 #include "client.h"
 #include "tcp_ip_helpers.h"
 
 const char mscIp[] = "127.0.0.1"; // using local ip only for now
 int bsSocket, mscSocket = 0;
+unsigned long int mscThreadId = 0;
 clientSockets_t mnSockets;
 
 void exitFunction()
@@ -38,7 +40,7 @@ void exitFunction()
     // close client sockets
     client_closeAllSockets(&mnSockets);
 
-    printf("BS Closed.\n");
+    printf("Base Station Closed.\n");
 }
 
 void signalHandler(int sig)
@@ -72,6 +74,24 @@ void signalHandler(int sig)
     }
 
     exit(EXIT_FAILURE);
+}
+
+void *handleMsc(void *arg)
+{
+    char buffer[TCP_BUFFER_SIZE];
+    int bytesReceived = 0;
+
+    // receive bytes from bs socket
+    while ((bytesReceived = recv(mscSocket, buffer, sizeof(buffer) - 1, 0)) > 0)
+    {
+        buffer[bytesReceived] = '\0'; // null terminate message
+
+        // TODO: process message
+    }
+
+    // server connection lost
+    printf("Lost connection to MSC.\n");
+    exit(EXIT_SUCCESS);
 }
 
 int main(int argc, char *argv[])
@@ -185,6 +205,10 @@ int main(int argc, char *argv[])
         printf("Failed to listen.\n");
         return EXIT_FAILURE;
     }
+
+    // create msc handler thread
+    pthread_create(&mscThreadId, NULL, handleMsc, NULL);
+    pthread_detach(mscThreadId);
 
     // listen for clients
     while (1)

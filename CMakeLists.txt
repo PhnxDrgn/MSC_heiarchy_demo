@@ -5,4 +5,5 @@ project(MSC_Heiarchy_Demo)
 
 add_subdirectory(msc)
 add_subdirectory(bs)
+add_subdirectory(mn)
 add_subdirectory(shared)

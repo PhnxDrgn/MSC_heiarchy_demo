@@ -21,13 +21,8 @@ void exitFunction()
 {
     // do stuff to make exit graceful
 
-    // closing msc socket if open
-    if (mscSocket != 0)
-    {
-        printf("Closing msc socket.\n");
-        shutdown(mscSocket, SHUT_RDWR);
-        close(mscSocket);
-    }
+    // close client sockets
+    client_closeAllSockets(&mnSockets);
 
     // closing bs socket if open
     if (bsSocket != 0)
@@ -35,10 +30,17 @@ void exitFunction()
         printf("Closing bs socket.\n");
         shutdown(bsSocket, SHUT_RDWR);
         close(bsSocket);
+        bsSocket = 0;
     }
 
-    // close client sockets
-    client_closeAllSockets(&mnSockets);
+    // closing msc socket if open
+    if (mscSocket != 0)
+    {
+        printf("Closing msc socket.\n");
+        shutdown(mscSocket, SHUT_RDWR);
+        close(mscSocket);
+        mscSocket = 0;
+    }
 
     printf("Base Station Closed.\n");
 }
@@ -81,7 +83,7 @@ void *handleMsc(void *arg)
     char buffer[TCP_BUFFER_SIZE];
     int bytesReceived = 0;
 
-    // receive bytes from bs socket
+    // receive bytes from msc socket
     while ((bytesReceived = recv(mscSocket, buffer, sizeof(buffer) - 1, 0)) > 0)
     {
         buffer[bytesReceived] = '\0'; // null terminate message
@@ -92,6 +94,32 @@ void *handleMsc(void *arg)
     // server connection lost
     printf("Lost connection to MSC.\n");
     exit(EXIT_SUCCESS);
+}
+
+void *handleMn(void *arg)
+{
+    socketData_t *mnSocket = (socketData_t *)arg;
+    char buffer[TCP_BUFFER_SIZE];
+    int bytesReceived = 0;
+
+    // receive bytes from mn socket
+    while ((bytesReceived = recv(mnSocket->socket, buffer, sizeof(buffer) - 1, 0)) > 0)
+    {
+        buffer[bytesReceived] = '\0'; // null terminate message
+
+        // TODO: process message
+    }
+
+    if (bytesReceived == 0)
+    {
+        printf("mn[%d]: Disconnected.\n", mnSocket->index);
+        client_closeSocket(&mnSockets, mnSocket);
+    }
+    else if (bytesReceived < 0)
+    {
+        printf("mn[%d]: Receive error\n", mnSocket->index);
+        client_closeSocket(&mnSockets, mnSocket);
+    }
 }
 
 int main(int argc, char *argv[])
@@ -114,6 +142,11 @@ int main(int argc, char *argv[])
 
     // check port
     unsigned int mscPort = strtoul(argv[2], NULL, 10);
+    if (mscPort == 0)
+    {
+        printf("Invalid port argument.\n");
+        return EXIT_FAILURE;
+    }
 
     // init client sockets
     client_socketsInit(&mnSockets);
@@ -211,17 +244,24 @@ int main(int argc, char *argv[])
     pthread_detach(mscThreadId);
 
     // listen for clients
-    while (1)
+    while (bsSocket != 0 && mscSocket != 0)
     {
         if (!mnSockets.socketsAvailable)
             continue;
 
-        socketData_t *availableClient = client_getAvailableSocket(&mnSockets);
+        socketData_t *availableMn = client_getAvailableSocket(&mnSockets);
 
-        availableClient->socket = accept(bsSocket, (struct sockaddr *)&availableClient->addr, &availableClient->addrLen);
-        printf("New Mobile Node accepted. ID given: %d\n", availableClient->index);
+        availableMn->socket = accept(bsSocket, (struct sockaddr *)&availableMn->addr, &availableMn->addrLen);
+        printf("New Mobile Node accepted. ID given: %d\n", availableMn->index);
 
-        // create thread to handle client
+        if (availableMn->socket <= 0)
+        {
+            client_closeSocket(&mnSockets, availableMn);
+        }
+
+        // create thread to handle mn
+        pthread_create(&availableMn->threadId, NULL, handleMn, (void *)availableMn);
+        pthread_detach(availableMn->threadId);
     }
 
     return EXIT_SUCCESS;

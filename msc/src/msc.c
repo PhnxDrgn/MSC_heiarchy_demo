@@ -24,6 +24,7 @@ void exitFunction()
         printf("Closing server socket.\n");
         shutdown(mscSocket, SHUT_RDWR);
         close(mscSocket);
+        mscSocket = 0;
     }
 
     // close client sockets
@@ -178,19 +179,25 @@ int main(int argc, char *argv[])
     }
 
     // listen for clients
-    while (1)
+    while (mscSocket != 0)
     {
         if (!bsSockets.socketsAvailable)
             continue;
 
-        socketData_t *availableClient = client_getAvailableSocket(&bsSockets);
+        socketData_t *availableBs = client_getAvailableSocket(&bsSockets);
 
-        availableClient->socket = accept(mscSocket, (struct sockaddr *)&availableClient->addr, &availableClient->addrLen);
-        printf("New Base Station accepted. ID given: %d\n", availableClient->index);
+        availableBs->socket = accept(mscSocket, (struct sockaddr *)&availableBs->addr, &availableBs->addrLen);
+
+        if (availableBs->socket <= 0)
+        {
+            client_closeSocket(&bsSockets, availableBs);
+        }
+
+        printf("New Base Station accepted. ID given: %d\n", availableBs->index);
 
         // create thread to handle bs
-        pthread_create(&availableClient->threadId, NULL, handleBs, (void *)availableClient);
-        pthread_detach(availableClient->threadId);
+        pthread_create(&availableBs->threadId, NULL, handleBs, (void *)availableBs);
+        pthread_detach(availableBs->threadId);
     }
 
     return EXIT_SUCCESS;
